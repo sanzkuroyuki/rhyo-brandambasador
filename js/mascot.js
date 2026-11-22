@@ -14,7 +14,7 @@
   var raf = 0, last = 0, tw = null, working = false;
   var tidyT = 0, sleepT = 0, faceT = 0, talkT = 0, pumpT = 0, dizzyT = 0, hopT = 0;
   var lastTalk = 0, lastTip = '', lastTipAt = 0, lastHurt = 0, lastItemHit = 0;
-  var queue = [], drag = null, hits = [];
+  var queue = [], drag = null, hits = [], carrying = null;
   var Q = {
     hello: 'Halo! Aku maskotnya Rhyo. Coba seret, banting, atau lempar aku!',
     brk: ['Eh! Aku perbaiki ya!', 'Tenang, aku datang!', 'Siap, meluncur!'],
@@ -24,7 +24,9 @@
     dizzy: ['Pusiing...', 'Dunia berputar...', 'Bintang-bintang~'],
     punch: ['Auw!', 'Jangan dipukul~', 'Hei!', 'Kok aku sih?'],
     caught: ['Eh?! Lepas!', 'Turunkan aku!', 'Aaa!'],
-    thrown: ['Wuaaa!', 'Aku terbang!']
+    thrown: ['Wuaaa!', 'Aku terbang!'],
+    place: ['Pasang lagi!', 'Kembali ke tempatnya!', 'Rapi!'],
+    grab: ['Kuambil ya!', 'Jangan berserakan~', 'Sini, kurapikan!']
   };
   var pick = function (a) { return a[Math.floor(Math.random() * a.length)]; };
   var clamp = function (v, a, b) { return Math.max(a, Math.min(b, v)); };
@@ -60,7 +62,7 @@
     if (x + MS > d.left + 12 && x < d.right - 12) return Math.min(floorY(), d.top - MH + 6);
     return floorY();
   }
-  function edgeX(x) { return (x + MS / 2 < W / 2) ? 8 : W - MS - 8; }
+  function edgeX(x) { return (x + MS / 2 < W / 2) ? 8 : W - MS - 26; }
   function render() {
     el.style.transform = 'translate3d(' + st.x.toFixed(1) + 'px,' + st.y.toFixed(1) + 'px,0)';
     rotEl.style.transform = 'rotate(' + st.rot.toFixed(1) + 'deg)';
@@ -154,20 +156,23 @@
 
   /* ================= tween (lari memperbaiki / merapikan diri) ================= */
   function tweenTo(tx, ty, dur, mode, done, arc) {
-    cancelTween();
+    tw = null;                       /* tween lama diganti tanpa melepas item yang sedang dibawa */
     st.mode = mode; el.classList.remove('idle');
-    tw = { t0: now(), x0: st.x, y0: st.y, x1: tx, y1: ty, dur: dur, done: done, arc: arc || 0 };
+    tw = { t0: now(), x0: st.x, y0: st.y, x1: tx, y1: ty, dur: dur, done: done, arc: arc || 0, onStep: null };
     kick();
   }
   function stepTween(t) {
     if (!tw) return;
+    if (tw.onStep) tw.onStep();
     var p = Math.min(1, (t - tw.t0) / tw.dur), e = 1 - Math.pow(1 - p, 3), dir = tw.x1 >= tw.x0 ? 1 : -1;
     st.x = tw.x0 + (tw.x1 - tw.x0) * e;
     st.y = tw.y0 + (tw.y1 - tw.y0) * e - Math.sin(Math.PI * p) * tw.arc;
     st.rot = dir * 9 * Math.sin(Math.PI * p);
     if (p >= 1) { var d = tw.done; tw = null; st.mode = 'idle'; el.classList.add('idle'); if (d) d(true); }
   }
-  function cancelTween() { if (tw) { tw = null; working = false; } }
+  /* dipanggil saat maskot diganggu (diseret, dipukul, ditabrak): item yang dibawa dilepas dan jatuh */
+  function dropCarry() { if (carrying) { P.release(carrying); carrying = null; } }
+  function cancelTween() { if (tw) { tw = null; working = false; } dropCarry(); }
 
   /* ================= dampak ================= */
   function hurt(speed) {
@@ -210,20 +215,21 @@
   function pump() {
     clearTimeout(pumpT);
     if (!st.started || working) return;
-    var t = now(), job = null, nextDue = Infinity, i, s;
-    queue = queue.filter(function (j) { var q = P.stateOf(j.el); return q === 'broken' || q === 'cracked'; });
-    for (i = 0; i < queue.length; i++) {
-      s = P.stateOf(queue[i].el);
-      if (s === 'broken' || (s === 'cracked' && t >= queue[i].due)) { job = queue[i]; break; }
-      nextDue = Math.min(nextDue, queue[i].due);
+    var t = now(), job = null, kind = null, nextDue = Infinity, i, k;
+    /* pekerjaan: repair (item pecah), carry (item jatuh/berpindah), heal (retak di tempat) */
+    queue = queue.filter(function (j) { return !!jobKind(j.el, true); });
+    for (i = 0; i < queue.length && !job; i++) if (jobKind(queue[i].el) === 'repair') { job = queue[i]; kind = 'repair'; }
+    for (i = 0; i < queue.length && !job; i++) {
+      k = jobKind(queue[i].el);
+      if (k && t >= queue[i].due) { job = queue[i]; kind = k; }
+      else nextDue = Math.min(nextDue, k ? queue[i].due : t + 300);
     }
     if (!job) { if (nextDue < Infinity) schedulePump(Math.max(60, nextDue - t)); else scheduleTidy(); return; }
     if (busy()) { schedulePump(160); return; }
-    var rec = P.reg.get(job.el);
-    if (P.stateOf(job.el) === 'cracked' && rec && rec.mode !== 'rest') { job.due = t + 400; schedulePump(400); return; }
     working = true; clearTimeout(tidyT); wake(); el.classList.remove('sleep');
+    var finish = function () { queue = queue.filter(function (x) { return x !== job; }); working = false; carrying = null; setFace(baseFace()); schedulePump(40); };
+    if (kind === 'carry') { doCarry(job, finish); return; }
     var hc = P.homeCenter(job.el);
-    var finish = function () { queue = queue.filter(function (x) { return x !== job; }); working = false; setFace(baseFace()); schedulePump(40); };
     if (!hc.visible) { P.repair(job.el, true); finish(); return; }
     var tx = clamp(hc.x - MS / 2, 4, W - MS - 4), ty = clamp(hc.y - MH / 2, 4, H - MH - 4);
     var dist = Math.hypot(tx - st.x, ty - st.y);
@@ -233,6 +239,48 @@
       if (q === 'broken' || q === 'cracked') { P.repair(job.el, true); face('happy', 700); talk(pick(Q.fix), 1300); P.fx.stars(tx + MS / 2, ty + MH / 2, 5, false); }
       setTimeout(finish, 170);
     }, 28);
+  }
+  /* jenis pekerjaan untuk satu item; keep=true: hanya cek apakah masih perlu dipertahankan di antrean */
+  function jobKind(item, keep) {
+    var s = P.reg.get(item);
+    if (!s) return null;
+    if (s.state === 'broken') return 'repair';
+    var moving = s.mode === 'fly' || s.mode === 'drag' || s.mode === 'home';
+    var displaced = !!(s.x || s.y || s.r);
+    if (moving) return keep ? 'wait' : null;
+    if (s.mode === 'carried') return keep ? 'wait' : null;
+    if (displaced) return 'carry';
+    if (s.state === 'cracked') return 'heal';
+    return null;
+  }
+  /* ambil item yang sudah jatuh, bawa ke tempat asalnya, lalu pasang lagi */
+  function doCarry(job, finish) {
+    var item = job.el, r = item.getBoundingClientRect();
+    if (!r.width) { P.place(item, true); finish(); return; }
+    var ix = r.left + r.width / 2, iy = r.top + r.height / 2;
+    var tx = clamp(ix - MS / 2, 4, W - MS - 4), ty = clamp(iy - MH / 2, 4, H - MH - 4);
+    var dist = Math.hypot(tx - st.x, ty - st.y);
+    setFace('work'); A.play('hop');
+    tweenTo(tx, ty, Math.max(160, Math.min(420, dist / 2.2)), 'work', function () {
+      if (!P.grab(item)) { setTimeout(finish, 60); return; }       /* item sudah berubah: batalkan */
+      carrying = item; A.play('pickup'); face('happy', 500); talk(pick(Q.grab), 1300);
+      var hc = P.homeCenter(item);
+      var gx = clamp(hc.x - MS / 2, 4, W - MS - 4), gy = clamp(hc.y - MH / 2, 4, H - MH - 4);
+      var d2 = Math.hypot(gx - st.x, gy - st.y);
+      tweenTo(gx, gy, clamp(d2 / 1.3, 360, 800), 'work', function () {
+        if (carrying === item) {
+          P.place(item); carrying = null;
+          face('happy', 800); talk(pick(Q.place), 1300);
+          P.fx.stars(st.x + MS / 2, st.y + MH / 2, 5, false);
+        }
+        setTimeout(finish, 220);
+      }, 40);
+      tw.onStep = function () {                                     /* tujuan ikut bergerak bila halaman digulir */
+        var h = P.homeCenter(item);
+        tw.x1 = clamp(h.x - MS / 2, 4, W - MS - 4); tw.y1 = clamp(h.y - MH / 2, 4, H - MH - 4);
+        P.carry(item, st.x + MS / 2, st.y + MH / 2 - 4);
+      };
+    }, 30);
   }
 
   /* ================= rapikan otomatis (1 detik setelah diam) ================= */
@@ -382,6 +430,7 @@
     if (P) {
       P.on('break', function (s) { enqueue(s.el, 0); talk(pick(Q.brk), 1500); });
       P.on('crack', function (s) { enqueue(s.el, 1500); });
+      P.on('rest', function (s) { enqueue(s.el, 600); });          /* item jatuh dan diam: maskot datang memungutnya */
       P.on('move', onItemMove);
     }
     /* komentar sesuai bagian halaman (tanpa menggulir halaman) */

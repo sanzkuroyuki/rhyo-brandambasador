@@ -3,6 +3,8 @@
 .pl.is-drag{z-index:60!important;cursor:grabbing;animation:none!important;transition:none!important;filter:drop-shadow(0 14px 10px rgba(18,25,92,.35))}
 .pl.is-fly{z-index:60!important;animation:none!important;transition:none!important}
 .pl.is-home{z-index:20}
+.pl.is-placed{animation:placeIn .38s cubic-bezier(.2,1.5,.4,1)}
+@keyframes placeIn{0%{transform:scale(1.18) rotate(-3deg)}60%{transform:scale(.96)}100%{transform:none}}
 .pl.is-broken{visibility:hidden!important;pointer-events:none!important}
 .pl.is-fixing{pointer-events:none!important;animation:fixIn .42s cubic-bezier(.2,1.6,.4,1) both!important;z-index:50}
 @keyframes fixIn{0%{transform:scale(.3) rotate(-14deg);opacity:0;filter:brightness(2.2)}60%{transform:scale(1.12) rotate(3deg);opacity:1;filter:brightness(1.5)}100%{transform:none;filter:none}}
@@ -23,7 +25,7 @@ main.shake{animation:shake .38s linear}
 .fxt{position:absolute;left:0;top:0;display:none;font-weight:900;font-size:1.6rem;color:#fff;text-shadow:0 3px 0 var(--navy),2px 0 0 var(--navy),-2px 0 0 var(--navy),0 -2px 0 var(--navy);will-change:transform,opacity;white-space:nowrap}
 
 /* ===== alat ===== */
-.tools{position:fixed;right:10px;top:42%;z-index:30;display:grid;gap:10px}
+.tools{position:fixed;right:30px;top:42%;z-index:30;display:grid;gap:10px}
 .tool{width:46px;height:46px;border-radius:50%;border:3px solid var(--navy);background:#fff;color:var(--navy);display:grid;place-items:center;cursor:pointer;box-shadow:0 4px 0 var(--navy);padding:0}
 .tool .ic{width:22px;height:22px}
 .tool:active{translate:0 3px;box-shadow:0 1px 0 var(--navy)}
@@ -70,7 +72,7 @@ main.shake{animation:shake .38s linear}
 .mascot.say-left .mascot__say{left:0;transform:translate(0,8px) scale(.9)}.mascot.say-left.talk .mascot__say{transform:translate(0,0) scale(1)}
 .mascot.say-right .mascot__say{left:auto;right:0;transform:translate(0,8px) scale(.9)}.mascot.say-right.talk .mascot__say{transform:translate(0,0) scale(1)}
 .mascot.say-left .mascot__say:after{left:30px}.mascot.say-right .mascot__say:after{left:auto;right:30px;margin-left:0}
-@media(max-width:600px){.mascot{--ms:74px}.tool{width:40px;height:40px;box-shadow:0 3px 0 var(--navy)}.tools{top:auto;bottom:96px;right:8px;gap:8px;grid-auto-flow:column}}
+@media(max-width:600px){.mascot{--ms:74px}.tool{width:40px;height:40px;box-shadow:0 3px 0 var(--navy)}.tools{top:auto;bottom:96px;right:22px;gap:8px;grid-auto-flow:column}}
 @media(prefers-reduced-motion:reduce){.mascot .ant,.mascot.idle .mascot__body{animation:none}}
 
 .mascot.say-below .mascot__say{bottom:auto;top:104%}

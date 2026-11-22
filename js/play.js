@@ -13,9 +13,9 @@
   'use strict';
   var A = window.RhyoAudio || { play: function () {} };
   var SEL = '.btn,.c,.card,.pill,.rb,.seal,.chips li,.tag,.dock a,.bubble,.qa,.brand,.video,.lnk,.lk,.soc a';
-  var G = 2600, REST = 0.46, HOME_DELAY = 6000, FIX_MS = 430;
+  var G = 2600, REST = 0.46, HOME_DELAY = 9000, FIX_MS = 430;
   var reg = new Map();
-  var listeners = { 'break': [], crack: [], fixed: [], move: [] };
+  var listeners = { 'break': [], crack: [], fixed: [], move: [], rest: [] };
   var cur = null, suppressUntil = 0, lastType = 'mouse';
   var flying = new Set();
   var raf = 0, last = 0;
@@ -210,6 +210,7 @@
     s.vx = s.vy = s.vr = 0; s.mode = 'rest';
     s.el.classList.remove('is-fly'); s.el.classList.add('is-home');
     scheduleHome(s);
+    emit('rest', s);                 /* maskot akan datang memungut item yang sudah jatuh */
   }
 
   /* ================= kerusakan ================= */
@@ -287,7 +288,7 @@
     return true;
   }
   function hammerHit(s) {
-    if (s.state === 'broken' || s.state === 'fixing') return;
+    if (s.state === 'broken' || s.state === 'fixing' || s.mode === 'carried') return;
     var r = s.el.getBoundingClientRect();
     A.play('hammer');
     suppressUntil = now() + 500;
@@ -315,10 +316,52 @@
       if (s.mode === 'home') { s.mode = 'rest'; el.style.transition = ''; el.style.transform = ''; el.classList.remove('is-home'); }
     }, 780);
   }
+  /* ================= dibawa maskot: ambil, bawa, pasang lagi ================= */
+  function grab(el) {
+    var s = reg.get(el);
+    if (!s || s.state === 'broken' || s.state === 'fixing' || s.mode !== 'rest') return false;
+    clearTimeout(s.homeT); clearTimeout(s.homeEnd); flying.delete(s);
+    s.mode = 'carried'; s.carryAt = now(); s.vx = s.vy = s.vr = 0;
+    el.style.transition = 'none';
+    el.classList.remove('is-home'); el.classList.add('is-fly');
+    return true;
+  }
+  function carry(el, cx, cy) {
+    var s = reg.get(el);
+    if (!s || s.mode !== 'carried') return;
+    var r = el.getBoundingClientRect();
+    var bx = r.left + r.width / 2 - s.x, by = r.top + r.height / 2 - s.y;
+    s.x = cx - bx; s.y = cy - by; s.r = Math.sin(now() / 110) * 4;
+    apply(s);
+  }
+  function place(el, instant) {
+    var s = reg.get(el);
+    if (!s || (s.mode !== 'carried' && !instant)) return false;
+    clearTimeout(s.homeT); clearTimeout(s.homeEnd); flying.delete(s);
+    resetPose(s); s.mode = 'rest';
+    el.classList.remove('is-fly', 'is-home', 'is-drag');
+    if (s.state === 'cracked') heal(s);
+    if (!instant) {
+      el.classList.remove('is-placed'); void el.offsetWidth; el.classList.add('is-placed');
+      setTimeout(function () { el.classList.remove('is-placed'); }, 400);
+      var r = el.getBoundingClientRect();
+      fx.stars(r.left + r.width / 2, r.top + r.height / 2, 4, false);
+      A.play('pop');
+    }
+    return true;
+  }
+  function release(el) {
+    var s = reg.get(el);
+    if (!s || s.mode !== 'carried') return;
+    s.mode = 'fly'; s.vx = s.vy = s.vr = 0; s.flyStart = now();
+    el.classList.add('is-fly'); flying.add(s); kick();
+  }
+
   function tidyAll() {
     reg.forEach(function (s) {
       if (s.state === 'broken') repair(s.el, false);
       else if (s.state === 'cracked') heal(s);
+      if (s.mode === 'carried') return;
       if (s.mode === 'fly') { flying.delete(s); s.mode = 'rest'; s.el.classList.remove('is-fly'); }
       if (s.state === 'ok' || s.state === 'cracked') { if (s.mode === 'rest' || s.mode === 'home') goHome(s); }
     });
@@ -336,7 +379,7 @@
     if (document.body.classList.contains('is-locked')) return;
     var el = plOf(e.target); if (!el) return;
     var s = S(el);
-    if (s.state === 'broken' || s.state === 'fixing') return;
+    if (s.state === 'broken' || s.state === 'fixing' || s.mode === 'carried') return;
     var r = el.getBoundingClientRect();
     if (r.height > innerHeight * .75 || r.width > innerWidth * .98) return;
     if (hammer()) { e.preventDefault(); hammerHit(s); return; }
@@ -431,6 +474,7 @@
       else if (s.state === 'cracked' && s.mode === 'rest' && t - s.crackedAt > 7000) heal(s);
       else if (s.state === 'fixing' && t - s.fixStart > 1500) { clearTimeout(s.fixT); s.el.classList.remove('is-fixing'); s.state = 'ok'; }
       if (s.mode === 'fly' && t - s.flyStart > 10000) settle(s);
+      if (s.mode === 'carried' && t - s.carryAt > 8000) release(s.el);
     });
   }, 700);
 
@@ -449,7 +493,7 @@
 
   window.RhyoPlay = {
     on: on, repair: repair, shatter: function (el) { return shatter(S(el)); }, crack: function (el) { return crack(S(el)); },
-    tidyAll: tidyAll, fx: fx, reg: reg, S: S,
+    tidyAll: tidyAll, fx: fx, reg: reg, S: S, grab: grab, carry: carry, place: place, release: release,
     stateOf: function (el) { var s = reg.get(el); return s ? s.state : null; },
     homeCenter: function (el) {
       var s = reg.get(el), r = el.getBoundingClientRect();

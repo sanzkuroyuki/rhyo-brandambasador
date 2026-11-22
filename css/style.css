@@ -1,6 +1,7 @@
 :root{--navy:#1b2a8f;--ink:#12195c;--blue:#2f63e6;--pink:#ff5fa8;--sun:#ffd23f;--pale:#e8f3ff;--green:#37c978}
 *{box-sizing:border-box;margin:0}
-html{scroll-behavior:smooth;scroll-padding-top:80px;overflow-x:clip}
+html{scroll-behavior:smooth;scroll-padding-top:80px;overflow-x:clip;scrollbar-width:none}
+html::-webkit-scrollbar,body::-webkit-scrollbar{display:none;width:0;height:0}
 body{font-family:'Zen Maru Gothic','Hiragino Maru Gothic ProN','Noto Sans JP',system-ui,sans-serif;font-weight:500;color:var(--ink);line-height:1.55;padding-bottom:110px;background:linear-gradient(160deg,#3a6df0,#79b8ff 60%,#bfe2ff) fixed;overflow-x:clip}
 body:before{content:"";position:fixed;inset:0;pointer-events:none;background-image:linear-gradient(rgba(255,255,255,.16) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.16) 1px,transparent 1px);background-size:28px 28px}
 body.is-locked{overflow:hidden}
@@ -171,3 +172,13 @@ b{font-weight:900}
 }
 @media(max-width:480px){.dock a{font-size:.6rem;padding:8px 0;white-space:nowrap}.dock small{font-size:.52rem}.dock{padding:4px;gap:2px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;transition-duration:.01ms!important}html{scroll-behavior:auto}.reveal{opacity:1;translate:none}}
+
+/* ===== scrollbar bertema (menggantikan bawaan browser) ===== */
+.scr{position:fixed;right:4px;top:12px;bottom:12px;width:16px;z-index:40;border-radius:99px;background:rgba(255,255,255,.6);border:3px solid var(--navy);box-shadow:0 3px 0 var(--navy);background-image:linear-gradient(rgba(27,42,143,.14) 1px,transparent 1px);background-size:100% 12px;touch-action:none;display:none;transition:opacity .3s}
+body.is-ready .scr{display:block}
+.scr.off{opacity:0;pointer-events:none}
+.scr__t{position:absolute;left:-3px;right:-3px;top:0;min-height:38px;border-radius:99px;background:var(--pink);border:3px solid var(--navy);cursor:grab;transition:background .2s;box-shadow:inset 0 3px 0 rgba(255,255,255,.45)}
+.scr__t:after{content:'';position:absolute;left:50%;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;background:#fff;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
+.scr.act .scr__t,.scr__t:hover,.scr.drag .scr__t{background:var(--sun)}
+.scr.drag .scr__t{cursor:grabbing}
+@media(max-width:820px){.scr{width:12px;top:10px;bottom:104px;right:3px;border-width:2px;box-shadow:0 2px 0 var(--navy)}.scr__t{left:-2px;right:-2px;border-width:2px;min-height:34px}}

@@ -222,4 +222,46 @@
   }
   $$('[data-copy]').forEach(function (b) { b.addEventListener('click', function () { copy(b.dataset.copy); }); });
   $$('.tag').forEach(function (t) { t.addEventListener('click', function () { copy(t.textContent.trim()); }); });
+
+  /* ===== scrollbar bertema (bisa diseret, klik trek untuk lompat) ===== */
+  var scr = $('#scr'), scrT = $('#scrT'), actT = 0, sDrag = null;
+  function scrMetrics() {
+    var dh = document.documentElement.scrollHeight, vh = innerHeight, tr = scr.clientHeight;
+    var tl = Math.max(38, Math.min(tr, tr * vh / dh)), maxS = Math.max(1, dh - vh);
+    return { dh: dh, vh: vh, tr: tr, tl: tl, maxS: maxS };
+  }
+  function scrUpdate() {
+    var m = scrMetrics(), p = Math.min(1, Math.max(0, window.scrollY / m.maxS));
+    scrT.style.height = m.tl + 'px';
+    scrT.style.transform = 'translateY(' + ((m.tr - m.tl) * p).toFixed(1) + 'px)';
+    scr.classList.toggle('off', m.dh <= m.vh + 2);
+  }
+  window.addEventListener('scroll', function () {
+    scrUpdate(); scr.classList.add('act'); clearTimeout(actT);
+    actT = setTimeout(function () { scr.classList.remove('act'); }, 700);
+  }, { passive: true });
+  window.addEventListener('resize', scrUpdate);
+  if ('ResizeObserver' in window) new ResizeObserver(scrUpdate).observe(document.body);
+  scrT.addEventListener('pointerdown', function (e) {
+    e.preventDefault(); e.stopPropagation();
+    var m = scrMetrics();
+    sDrag = { id: e.pointerId, y0: e.clientY, s0: window.scrollY, m: m };
+    scr.classList.add('drag'); try { scrT.setPointerCapture(e.pointerId); } catch (er) { /* abaikan */ }
+    A.play('pickup');
+  });
+  scrT.addEventListener('pointermove', function (e) {
+    if (!sDrag || e.pointerId !== sDrag.id) return;
+    var m = sDrag.m, k = (e.clientY - sDrag.y0) / Math.max(1, m.tr - m.tl);
+    window.scrollTo({ top: sDrag.s0 + k * m.maxS, behavior: 'instant' });
+    e.preventDefault();
+  });
+  function scrEnd(e) { if (sDrag && e.pointerId === sDrag.id) { sDrag = null; scr.classList.remove('drag'); } }
+  scrT.addEventListener('pointerup', scrEnd); scrT.addEventListener('pointercancel', scrEnd);
+  scr.addEventListener('pointerdown', function (e) {
+    if (e.target !== scr) return;
+    var r = scr.getBoundingClientRect(), m = scrMetrics(), k = (e.clientY - r.top - m.tl / 2) / Math.max(1, m.tr - m.tl);
+    window.scrollTo({ top: Math.max(0, Math.min(1, k)) * m.maxS, behavior: 'smooth' });
+    A.play('tap');
+  });
+  scrUpdate();
 })();
